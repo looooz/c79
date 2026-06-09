@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: "Noto Sans SC", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: #3E2723;
+    color: #fff;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    background: rgba(30, 20, 15, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 rounded-xl font-semibold transition-all duration-200
+           bg-gradient-to-b from-accent-orange to-orange-700
+           text-white shadow-lg hover:shadow-orange-500/30
+           hover:scale-[1.03] active:scale-[0.98] active:shadow-inner;
+  }
+
+  .btn-secondary {
+    @apply px-5 py-2.5 rounded-xl font-medium transition-all duration-200
+           bg-white/10 hover:bg-white/15 text-white
+           border border-white/10 hover:border-white/20
+           hover:scale-[1.02] active:scale-[0.98];
+  }
+
+  .text-display {
+    font-family: "Orbitron", system-ui, sans-serif;
+    letter-spacing: 0.05em;
+  }
+
+  .progress-track {
+    @apply h-3 rounded-full bg-black/40 overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-150 ease-out;
+    background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 50%, #CDDC39 100%);
+  }
+
+  .combo-text {
+    font-family: "Orbitron", system-ui, sans-serif;
+    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .text-shadow-glow {
+    text-shadow: 0 0 8px currentColor;
+  }
+
+  .texture-wood {
+    background-image:
+      repeating-linear-gradient(
+        90deg,
+        rgba(60, 30, 15, 0.15) 0px,
+        rgba(90, 50, 30, 0.05) 2px,
+        rgba(60, 30, 15, 0.15) 4px
+      ),
+      linear-gradient(135deg, #5D4037 0%, #4E342E 50%, #3E2723 100%);
+  }
+}
