@@ -14,6 +14,8 @@ import {
   Flame,
   X,
   ChevronRight,
+  HelpCircle,
+  ArrowRight,
 } from 'lucide-react'
 import { GameEngine } from '@/game/GameEngine'
 import { audioManager } from '@/audio/AudioManager'
@@ -77,11 +79,14 @@ export default function GamePlay() {
   const progressAddCoins = useProgressStore((s) => s.addCoins)
   const progressUpdateStats = useProgressStore((s) => s.updateStats)
   const progressCompleteLevel = useProgressStore((s) => s.completeLevel)
+  const progressHasSeenTutorial = useProgressStore((s) => s.hasSeenTutorial)
+  const progressMarkTutorialSeen = useProgressStore((s) => s.markTutorialSeen)
 
   const uiScreenShake = useUIStore((s) => s.screenShake)
   const uiToast = useUIStore((s) => s.toast)
   const uiTriggerShake = useUIStore((s) => s.triggerShake)
   const uiHideModal = useUIStore((s) => s.hideModal)
+  const uiShowToast = useUIStore((s) => s.showToast)
 
   const [showResult, setShowResult] = useState(false)
   const [resultData, setResultData] = useState<{
@@ -92,6 +97,8 @@ export default function GamePlay() {
     coins: number
     maxCombo: number
   } | null>(null)
+  const [showTutorial, setShowTutorial] = useState(false)
+  const [tutorialStep, setTutorialStep] = useState(0)
 
   const levelConfig = LEVELS[Number(levelId) - 1]
 
@@ -121,13 +128,14 @@ export default function GamePlay() {
       }
     })
 
-    gameStartLevel(Number(levelId), screws, levelConfig.timeLimit)
+    const gameState = useGameStore.getState()
+    gameState.startLevel(Number(levelId), screws, levelConfig.timeLimit)
 
     const batteryMax = getBatteryMaxValue(
       progressUpgrades.find((u) => u.id === 'batteryMax')?.currentLevel ?? 0,
     )
-    gameRechargeBattery(batteryMax)
-  }, [levelConfig, levelId, gameStartLevel, gameRechargeBattery, progressUpgrades])
+    gameState.rechargeBattery(batteryMax)
+  }, [levelConfig, levelId, progressUpgrades])
 
   const setupSkin = useCallback(() => {
     const sdSkin = getEquippedSkin(progressSkins, 'screwdriver')
@@ -171,50 +179,61 @@ export default function GamePlay() {
 
     engine.setCallbacks({
       onScrewRemoved: (screwId, baseScore) => {
-        gameRemoveScrew(screwId, baseScore)
+        const g = useGameStore.getState()
+        const p = useProgressStore.getState()
+        const ui = useUIStore.getState()
+        g.removeScrew(screwId, baseScore)
         audioManager.playScrewRemove()
         if (progressSettings.vibrationEnabled) {
           audioManager.vibrate(100)
         }
-        uiTriggerShake(250)
-        const currentCombo = useGameStore.getState().combo
+        ui.triggerShake(250)
+        const currentCombo = g.combo
         if (currentCombo > 0 && currentCombo % 5 === 0) {
           audioManager.playCombo(currentCombo)
         }
 
-        const fastest = progressStatistics.fastestScrew
-        const screw = useGameStore.getState().screws.find((s) => s.id === screwId)
+        const fastest = p.statistics.fastestScrew
+        const screw = g.screws.find((s) => s.id === screwId)
         if (screw && screw.startTime > 0) {
           const elapsed = (performance.now() - screw.startTime) / 1000
           const isFastestUnset =
             typeof fastest !== 'number' || !isFinite(fastest)
           if (isFastestUnset || elapsed < fastest) {
-            progressUpdateStats({ fastestScrew: elapsed })
+            p.updateStats({ fastestScrew: elapsed })
           }
         }
-        const currentMaxCombo = useGameStore.getState().maxCombo
-        progressUpdateStats({
-          totalScrews: progressStatistics.totalScrews + 1,
+        const currentMaxCombo = g.maxCombo
+        p.updateStats({
+          totalScrews: p.statistics.totalScrews + 1,
           highestCombo: Math.max(
-            progressStatistics.highestCombo,
+            p.statistics.highestCombo,
             currentMaxCombo,
           ),
         })
       },
       onProgressUpdate: (screwId, amount) => {
-        gameAddProgress(screwId, amount)
+        useGameStore.getState().addProgress(screwId, amount)
       },
       onMilestone: () => {
         audioManager.playMilestone()
       },
       onAllRemoved: () => {
-        gameWin()
+        useGameStore.getState().win()
       },
       onTick: (dt) => {
-        gameTick(dt)
-        const currentElectricMode = useGameStore.getState().electricMode
-        if (currentElectricMode) {
-          gameConsumeBattery(dt * 12)
+        const g = useGameStore.getState()
+        g.tick(dt)
+        if (g.electricMode) {
+          g.consumeBattery(dt * 12)
+        }
+      },
+      onWrongAction: (reason) => {
+        const ui = useUIStore.getState()
+        if (reason === 'wrongBit') {
+          ui.showToast('批头不匹配！请切换到对应批头', 'error')
+        } else if (reason === 'wrongOrder') {
+          ui.showToast('请按顺序拆卸！先拆编号最小的螺丝', 'error')
         }
       },
     })
@@ -236,14 +255,6 @@ export default function GamePlay() {
     setupSkin,
     progressSettings,
     progressUpgrades,
-    progressStatistics,
-    progressUpdateStats,
-    gameRemoveScrew,
-    gameAddProgress,
-    gameWin,
-    gameTick,
-    gameConsumeBattery,
-    uiTriggerShake,
   ])
 
   useEffect(() => {
@@ -262,6 +273,15 @@ export default function GamePlay() {
   }, [gameScrews])
 
   useEffect(() => {
+    if (!progressHasSeenTutorial && !showTutorial) {
+      setTimeout(() => {
+        setShowTutorial(true)
+        setTutorialStep(0)
+      }, 500)
+    }
+  }, [progressHasSeenTutorial, showTutorial])
+
+  useEffect(() => {
     const bitSetLevel =
       progressUpgrades.find((u) => u.id === 'bitSet')?.currentLevel ?? 0
     if (!hasAutoBit(bitSetLevel)) return
@@ -269,10 +289,11 @@ export default function GamePlay() {
     const nextScrew = gameScrews
       .filter((s) => !s.removed)
       .sort((a, b) => a.order - b.order)[0]
-    if (nextScrew && nextScrew.type !== gameActiveBit) {
-      gameSetActiveBit(nextScrew.type)
+    const state = useGameStore.getState()
+    if (nextScrew && nextScrew.type !== state.activeBit) {
+      state.setActiveBit(nextScrew.type)
     }
-  }, [gameScrews, progressUpgrades, gameActiveBit, gameSetActiveBit])
+  }, [gameScrews, progressUpgrades])
 
   useEffect(() => {
     if (gameStatus === 'won' && !showResult) {
@@ -321,13 +342,13 @@ export default function GamePlay() {
 
   useEffect(() => {
     const elapsed = gameElapsedTime
-    if (elapsed > 0) {
-      const totalPlayTime = progressStatistics.totalPlayTime
-      progressUpdateStats({
-        totalPlayTime: totalPlayTime + (gameStatus === 'playing' ? 0.016 : 0),
+    if (elapsed > 0 && gameStatus === 'playing') {
+      const p = useProgressStore.getState()
+      p.updateStats({
+        totalPlayTime: p.statistics.totalPlayTime + 0.016,
       })
     }
-  }, [gameElapsedTime, gameStatus, progressStatistics, progressUpdateStats])
+  }, [gameElapsedTime, gameStatus])
 
   useEffect(() => {
     const shakeDuration = uiScreenShake
@@ -337,7 +358,7 @@ export default function GamePlay() {
     } else if (canvasRef.current) {
       canvasRef.current.style.transform = 'translate(0, 0)'
     }
-  }, [uiScreenShake, gameElapsedTime])
+  }, [uiScreenShake])
 
   const handlePauseToggle = () => {
     audioManager.playClick()
@@ -401,7 +422,7 @@ export default function GamePlay() {
     <div className="relative h-full w-full overflow-hidden bg-wood-900">
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full touch-none select-none cursor-none"
+        className="absolute inset-0 z-0 w-full h-full touch-none select-none cursor-none"
         style={{ transition: 'transform 50ms ease-out' }}
       />
 
@@ -461,6 +482,17 @@ export default function GamePlay() {
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => {
+                    audioManager.playClick()
+                    setShowTutorial(true)
+                    setTutorialStep(0)
+                  }}
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95"
+                  title="游戏帮助"
+                >
+                  <HelpCircle className="w-5 h-5" />
+                </button>
+                <button
                   onClick={handlePauseToggle}
                   className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95"
                 >
@@ -510,13 +542,14 @@ export default function GamePlay() {
                   key={bit.type}
                   onClick={() => {
                     audioManager.playClick()
-                    gameSetActiveBit(bit.type)
+                    useGameStore.getState().setActiveBit(bit.type)
+                    uiShowToast(`已切换到「${bit.label}」批头`, 'info')
                   }}
                   className={cn(
-                    'w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center transition-all',
+                    'w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center transition-all active:scale-90 hover:scale-105',
                     gameActiveBit === bit.type
-                      ? 'bg-gradient-to-b from-accent-orange to-orange-700 shadow-lg shadow-orange-500/30 scale-105'
-                      : 'bg-white/10 hover:bg-white/15',
+                      ? 'bg-gradient-to-b from-accent-orange to-orange-700 shadow-lg shadow-orange-500/40 ring-2 ring-orange-400/60 scale-110'
+                      : 'bg-white/10 hover:bg-white/20',
                   )}
                   title={bit.label}
                 >
@@ -739,6 +772,218 @@ export default function GamePlay() {
             >
               <X className="w-4 h-4 inline" />
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showTutorial && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-40 bg-black/75 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 30 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 30 }}
+              transition={{ type: 'spring' as const, stiffness: 300, damping: 25 }}
+              className="glass-panel rounded-3xl p-5 md:p-8 max-w-lg w-full"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-2xl md:text-3xl font-display font-bold text-white flex items-center gap-2">
+                  <HelpCircle className="w-7 h-7 md:w-8 md:h-8 text-accent-orange" />
+                  游戏教程
+                </h3>
+                <button
+                  onClick={() => {
+                    audioManager.playClick()
+                    setShowTutorial(false)
+                    if (!progressHasSeenTutorial) {
+                      progressMarkTutorialSeen()
+                    }
+                  }}
+                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={tutorialStep}
+                    initial={{ opacity: 0, x: 30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -30 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' as const }}
+                    className="space-y-4"
+                  >
+                    {tutorialStep === 0 && (
+                      <div className="text-center py-6">
+                        <div className="w-24 h-24 mx-auto mb-5 rounded-full bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center text-5xl shadow-2xl shadow-orange-500/40 animate-pulse-glow">
+                          🔩
+                        </div>
+                        <h4 className="text-xl md:text-2xl font-bold text-white mb-3">
+                          欢迎来到拆螺丝！
+                        </h4>
+                        <p className="text-white/70 text-base md:text-lg leading-relaxed">
+                          一款超解压的拧螺丝小游戏，放松心情，释放压力！
+                        </p>
+                      </div>
+                    )}
+
+                    {tutorialStep === 1 && (
+                      <div>
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-700 flex items-center justify-center text-3xl shadow-xl shadow-blue-500/30">
+                          ↻
+                        </div>
+                        <h4 className="text-xl font-bold text-white mb-3 text-center">
+                          顺时针画圈拆卸
+                        </h4>
+                        <ul className="space-y-2.5 text-white/80">
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-400 mt-1">●</span>
+                            <span>在螺丝上<b className="text-white">按住鼠标左键</b></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-400 mt-1">●</span>
+                            <span><b className="text-white">顺时针画圈</b>旋转（逆时针无效）</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-400 mt-1">●</span>
+                            <span>画圈<b className="text-white">越快</b>，拆卸进度增加<b className="text-white">越快</b></span>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+
+                    {tutorialStep === 2 && (
+                      <div>
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-700 flex items-center justify-center text-3xl shadow-xl shadow-purple-500/30">
+                          ✚━⬡⬢
+                        </div>
+                        <h4 className="text-xl font-bold text-white mb-3 text-center">
+                          切换匹配的批头
+                        </h4>
+                        <ul className="space-y-2.5 text-white/80">
+                          <li className="flex items-start gap-2">
+                            <span className="text-purple-400 mt-1">●</span>
+                            <span>不同螺丝需要<b className="text-white">对应批头</b>才能拆卸</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-purple-400 mt-1">●</span>
+                            <span>点击底部<b className="text-white">批头按钮</b>切换类型</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-purple-400 mt-1">●</span>
+                            <span><b className="text-blue-400">蓝色光环</b>指示应该拆的下一颗螺丝</span>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+
+                    {tutorialStep === 3 && (
+                      <div>
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-600 flex items-center justify-center text-3xl shadow-xl shadow-yellow-500/30">
+                          ⚡
+                        </div>
+                        <h4 className="text-xl font-bold text-white mb-3 text-center">
+                          电动模式 & 连击加分
+                        </h4>
+                        <ul className="space-y-2.5 text-white/80">
+                          <li className="flex items-start gap-2">
+                            <span className="text-yellow-400 mt-1">●</span>
+                            <span>开启<b className="text-yellow-400">电动模式</b>后按住自动旋转（消耗电量）</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-yellow-400 mt-1">●</span>
+                            <span>连续快速拆卸获得<b className="text-orange-400">连击加成</b></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-yellow-400 mt-1">●</span>
+                            <span>在商店<b className="text-white">升级工具</b>获得更强能力</span>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+
+                    {tutorialStep === 4 && (
+                      <div className="text-center py-4">
+                        <div className="w-24 h-24 mx-auto mb-5 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center text-5xl shadow-2xl shadow-green-500/40">
+                          🎮
+                        </div>
+                        <h4 className="text-xl md:text-2xl font-bold text-white mb-3">
+                          准备好了吗？
+                        </h4>
+                        <p className="text-white/70 text-base md:text-lg mb-2">
+                          记住要点：顺时针 + 匹配批头 + 按顺序
+                        </p>
+                        <p className="text-green-400 text-sm">
+                          有问题随时点击右上角 ❓ 按钮查看教程
+                        </p>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        'h-1.5 rounded-full transition-all duration-300',
+                        i === tutorialStep
+                          ? 'w-8 bg-accent-orange'
+                          : i < tutorialStep
+                            ? 'w-4 bg-accent-orange/60'
+                            : 'w-4 bg-white/20',
+                      )}
+                    />
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {tutorialStep > 0 && (
+                    <button
+                      onClick={() => {
+                        audioManager.playClick()
+                        setTutorialStep((s) => s - 1)
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white transition-all active:scale-95"
+                    >
+                      上一步
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      audioManager.playClick()
+                      if (tutorialStep < 4) {
+                        setTutorialStep((s) => s + 1)
+                      } else {
+                        setShowTutorial(false)
+                        if (!progressHasSeenTutorial) {
+                          progressMarkTutorialSeen()
+                        }
+                      }
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-b from-accent-orange to-orange-700 text-white font-medium shadow-lg shadow-orange-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5"
+                  >
+                    {tutorialStep < 4 ? (
+                      <>
+                        下一步
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    ) : (
+                      '开始游戏 🎉'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

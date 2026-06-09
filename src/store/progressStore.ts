@@ -45,6 +45,7 @@ interface ProgressActions {
   ) => void
   updateStats: (partial: Partial<Statistics>) => void
   updateSettings: (partial: Partial<GameSettings>) => void
+  markTutorialSeen: () => void
   resetAll: () => void
 }
 
@@ -58,6 +59,7 @@ const createInitialState = (): ProgressState => ({
   statistics: { ...DEFAULT_STATISTICS, levelBestTimes: {} },
   settings: { ...DEFAULT_SETTINGS },
   levels: { ...DEFAULT_LEVELS },
+  hasSeenTutorial: false,
 })
 
 export const useProgressStore = create<ProgressStore>()(
@@ -183,6 +185,10 @@ export const useProgressStore = create<ProgressStore>()(
         }))
       },
 
+      markTutorialSeen: () => {
+        set({ hasSeenTutorial: true })
+      },
+
       resetAll: () => {
         clearAllStorage()
         set(createInitialState())
@@ -198,6 +204,7 @@ export const useProgressStore = create<ProgressStore>()(
         statistics: state.statistics,
         settings: state.settings,
         levels: state.levels,
+        hasSeenTutorial: state.hasSeenTutorial,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -206,6 +213,9 @@ export const useProgressStore = create<ProgressStore>()(
           }
           if (!state.statistics.levelBestTimes) {
             state.statistics.levelBestTimes = {}
+          }
+          if (state.hasSeenTutorial === null || state.hasSeenTutorial === undefined) {
+            state.hasSeenTutorial = false
           }
         }
       },

@@ -84,6 +84,7 @@ export interface ProgressState {
   statistics: Statistics
   settings: GameSettings
   levels: Record<number, LevelProgress>
+  hasSeenTutorial: boolean
 }
 
 export type GameStatus = 'idle' | 'playing' | 'paused' | 'won' | 'lost'

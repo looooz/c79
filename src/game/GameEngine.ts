@@ -12,6 +12,7 @@ export interface EngineCallbacks {
   onMilestone: (milestone: number) => void
   onAllRemoved: () => void
   onTick: (dt: number) => void
+  onWrongAction: (reason: 'wrongBit' | 'wrongOrder' | 'noScrew') => void
 }
 
 export class GameEngine {
@@ -186,12 +187,23 @@ export class GameEngine {
       }
     }
 
+    this.screwdriverScreenX = this.width / 2
+    this.screwdriverScreenY = this.height / 2
+
+    this.canvas.addEventListener('pointerenter', (e) => {
+      const { x, y } = getPos(e)
+      this.screwdriverScreenX = x
+      this.screwdriverScreenY = y
+    })
+
     this.canvas.addEventListener('pointerdown', (e) => {
       if (!this.isRunning || this.isPaused) return
       const { x, y } = getPos(e)
       this.isPointerDown = true
       this.pointerX = x
       this.pointerY = y
+      this.screwdriverScreenX = x
+      this.screwdriverScreenY = y
       this.handlePointerDown(x, y)
       this.canvas!.setPointerCapture(e.pointerId)
     })
@@ -224,12 +236,21 @@ export class GameEngine {
 
   private handlePointerDown(x: number, y: number): void {
     const screw = this.findScrewAt(x, y)
-    if (!screw || screw.removed) return
+    if (!screw || screw.removed) {
+      this.callbacks?.onWrongAction('noScrew')
+      return
+    }
 
     const nextOrder = this.getNextOrder()
-    if (screw.order !== nextOrder) return
+    if (screw.order !== nextOrder) {
+      this.callbacks?.onWrongAction('wrongOrder')
+      return
+    }
 
-    if (screw.type !== this.activeBit) return
+    if (screw.type !== this.activeBit) {
+      this.callbacks?.onWrongAction('wrongBit')
+      return
+    }
 
     this.activeScrewId = screw.id
     this.rotationDetector.setCenter(screw.pixelX, screw.pixelY)
@@ -266,11 +287,17 @@ export class GameEngine {
 
   private findScrewAt(x: number, y: number): RuntimeScrew | undefined {
     for (const screw of this.screws) {
-      if (distance(x, y, screw.pixelX, screw.pixelY) < screw.pixelSize * 0.75) {
+      if (distance(x, y, screw.pixelX, screw.pixelY) < screw.pixelSize * 1.5) {
         return screw
       }
     }
     return undefined
+  }
+
+  getNextScrew(): RuntimeScrew | undefined {
+    const nextOrder = this.getNextOrder()
+    if (nextOrder < 0) return undefined
+    return this.screws.find((s) => s.order === nextOrder)
   }
 
   private getNextOrder(): number {
