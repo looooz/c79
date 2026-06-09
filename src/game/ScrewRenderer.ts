@@ -388,8 +388,10 @@ export class ScrewRenderer {
     const gradient = this.skinConfig.screwdriverGradient ?? ['#F44336', '#B71C1C']
     const primary = this.skinConfig.screwdriverPrimary ?? '#F44336'
 
+    const TIP_OFFSET = 135
+
     ctx.save()
-    ctx.translate(x, y)
+    ctx.translate(x - TIP_OFFSET * Math.cos(rotation), y - TIP_OFFSET * Math.sin(rotation))
     ctx.rotate(rotation)
 
     const handleLen = 80

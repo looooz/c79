@@ -234,31 +234,35 @@ export class GameEngine {
     })
   }
 
-  private handlePointerDown(x: number, y: number): void {
+  private handlePointerDown(x: number, y: number, showFeedback: boolean = true): boolean {
     const screw = this.findScrewAt(x, y)
     if (!screw || screw.removed) {
-      this.callbacks?.onWrongAction('noScrew')
-      return
+      if (showFeedback) this.callbacks?.onWrongAction('noScrew')
+      return false
     }
 
     const nextOrder = this.getNextOrder()
     if (screw.order !== nextOrder) {
-      this.callbacks?.onWrongAction('wrongOrder')
-      return
+      if (showFeedback) this.callbacks?.onWrongAction('wrongOrder')
+      return false
     }
 
     if (screw.type !== this.activeBit) {
-      this.callbacks?.onWrongAction('wrongBit')
-      return
+      if (showFeedback) this.callbacks?.onWrongAction('wrongBit')
+      return false
     }
 
     this.activeScrewId = screw.id
     this.rotationDetector.setCenter(screw.pixelX, screw.pixelY)
     screw.startTime = performance.now()
+    return true
   }
 
   private handlePointerMove(x: number, y: number): void {
-    if (!this.activeScrewId) return
+    if (!this.activeScrewId) {
+      this.handlePointerDown(x, y, false)
+      if (!this.activeScrewId) return
+    }
 
     const screw = this.screws.find((s) => s.id === this.activeScrewId)
     if (!screw || screw.removed) {
@@ -270,9 +274,9 @@ export class GameEngine {
     const result = this.rotationDetector.update(x, y, time)
 
     if (result.isClockwise) {
-      const speedFactor = 0.4 + result.instantaneousSpeed * 0.06
-      const progress = result.totalClockwise > 0 ? speedFactor * 0.15 : 0
-      screw.rotation += Math.abs(result.instantaneousSpeed * 0.05)
+      const speedFactor = 0.6 + result.instantaneousSpeed * 0.08
+      const progress = speedFactor * 0.25
+      screw.rotation += Math.abs(result.instantaneousSpeed * 0.08)
 
       if (progress > 0) {
         this.applyProgress(screw, progress)
@@ -366,17 +370,20 @@ export class GameEngine {
   }
 
   private updateElectricMode(dt: number): void {
-    if (!this.electricMode || !this.isPointerDown) return
+    if (!this.electricMode) return
+    if (!this.activeScrewId) {
+      this.handlePointerDown(this.pointerX, this.pointerY, false)
+    }
     if (!this.activeScrewId) return
 
     const screw = this.screws.find((s) => s.id === this.activeScrewId)
     if (!screw || screw.removed) return
 
-    const baseSpeed = 8 * this.electricSpeedMultiplier
+    const baseSpeed = 12 * this.electricSpeedMultiplier
     this.electricRotation += baseSpeed * dt
-    screw.rotation += baseSpeed * dt * 2
+    screw.rotation += baseSpeed * dt * 2.5
 
-    const progress = baseSpeed * dt * 15
+    const progress = baseSpeed * dt * 20
     this.applyProgress(screw, progress)
   }
 
@@ -405,11 +412,13 @@ export class GameEngine {
 
     this.updateElectricMode(dt)
 
-    if (this.isPointerDown && activeScrew) {
-      const targetRot = Math.atan2(
-        this.pointerY - activeScrew.pixelY,
-        this.pointerX - activeScrew.pixelX,
-      )
+    if ((this.isPointerDown || this.electricMode) && activeScrew) {
+      const targetRot = this.electricMode
+        ? this.electricRotation
+        : Math.atan2(
+            this.pointerY - activeScrew.pixelY,
+            this.pointerX - activeScrew.pixelX,
+          )
       this.screwdriverRotation = targetRot
     }
 
