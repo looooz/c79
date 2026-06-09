@@ -427,7 +427,7 @@ export default function GamePlay() {
       />
 
       <div className="absolute top-0 left-0 right-0 z-10 p-3 md:p-4">
-        <div className="glass-panel rounded-2xl p-3 md:p-4">
+        <div className="glass-panel rounded-2xl p-3 md:p-4 pointer-events-none">
           <div className="flex items-center justify-between gap-2 md:gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5">
@@ -487,14 +487,14 @@ export default function GamePlay() {
                     setShowTutorial(true)
                     setTutorialStep(0)
                   }}
-                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95"
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95 pointer-events-auto"
                   title="游戏帮助"
                 >
                   <HelpCircle className="w-5 h-5" />
                 </button>
                 <button
                   onClick={handlePauseToggle}
-                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95"
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95 pointer-events-auto"
                 >
                   {gameStatus === 'paused' ? (
                     <Play className="w-5 h-5" />
@@ -507,7 +507,7 @@ export default function GamePlay() {
                     audioManager.playClick()
                     navigate('/levels')
                   }}
-                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95"
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-105 active:scale-95 pointer-events-auto"
                 >
                   <HomeIcon className="w-5 h-5" />
                 </button>
@@ -533,7 +533,7 @@ export default function GamePlay() {
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-10 p-3 md:p-4">
-        <div className="glass-panel rounded-2xl p-3 md:p-4">
+        <div className="glass-panel rounded-2xl p-3 md:p-4 pointer-events-none">
           <div className="flex items-center justify-between gap-2 md:gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-xs md:text-sm text-white/60 mr-1">批头:</span>
@@ -546,7 +546,7 @@ export default function GamePlay() {
                     uiShowToast(`已切换到「${bit.label}」批头`, 'info')
                   }}
                   className={cn(
-                    'w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center transition-all active:scale-90 hover:scale-105',
+                    'w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center transition-all active:scale-90 hover:scale-105 pointer-events-auto',
                     gameActiveBit === bit.type
                       ? 'bg-gradient-to-b from-accent-orange to-orange-700 shadow-lg shadow-orange-500/40 ring-2 ring-orange-400/60 scale-110'
                       : 'bg-white/10 hover:bg-white/20',
@@ -565,7 +565,7 @@ export default function GamePlay() {
                   gameToggleElectricMode()
                 }}
                 className={cn(
-                  'flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-xl font-medium transition-all',
+                  'flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-xl font-medium transition-all pointer-events-auto',
                   gameElectricMode && gameBattery > 0
                     ? 'bg-gradient-to-b from-yellow-500 to-yellow-700 text-white shadow-lg shadow-yellow-500/30 animate-pulse-glow'
                     : 'bg-white/10 hover:bg-white/15 text-white/70',
@@ -587,7 +587,7 @@ export default function GamePlay() {
 
               <button
                 onClick={handleRestart}
-                className="flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white transition-all"
+                className="flex items-center gap-2 px-3 md:px-5 py-2 md:py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white transition-all pointer-events-auto"
               >
                 <RotateCcw className="w-4 h-4 md:w-5 md:h-5" />
                 <span className="text-sm md:text-base hidden sm:inline">重开</span>

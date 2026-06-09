@@ -13,7 +13,9 @@ export class RotationDetector {
   private lastTime: number = 0
   private accumulatedClockwise: number = 0
   private speedSamples: number[] = []
+  private diffHistory: number[] = []
   private readonly maxSamples = 8
+  private readonly maxHistory = 10
 
   setCenter(x: number, y: number): void {
     this.centerX = x
@@ -26,6 +28,7 @@ export class RotationDetector {
     this.lastTime = 0
     this.accumulatedClockwise = 0
     this.speedSamples = []
+    this.diffHistory = []
   }
 
   update(x: number, y: number, time: number): RotationResult {
@@ -35,10 +38,19 @@ export class RotationDetector {
 
     if (this.lastAngle !== null) {
       const diff = angleDiff(currentAngle, this.lastAngle)
-      isClockwise = diff < 0
 
-      if (isClockwise) {
+      this.diffHistory.push(diff)
+      if (this.diffHistory.length > this.maxHistory) {
+        this.diffHistory.shift()
+      }
+
+      const recentSum = this.diffHistory.reduce((a, b) => a + b, 0)
+      isClockwise = recentSum < -0.015
+
+      if (diff < 0) {
         this.accumulatedClockwise += Math.abs(diff)
+      } else if (isClockwise && diff < 0.12) {
+        this.accumulatedClockwise += Math.abs(diff) * 0.3
       }
 
       const timeDiff = time - this.lastTime

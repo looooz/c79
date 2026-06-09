@@ -23,12 +23,14 @@ export const LEVELS: LevelConfig[] = Array.from({ length: 15 }, (_, i) => {
 export const generateScrewPositions = (count: number): Array<{ x: number; y: number }> => {
   const positions: Array<{ x: number; y: number }> = []
   const minDist = count <= 8 ? 22 : count <= 12 ? 18 : 15
-  const padding = 12
+  const paddingX = 12
+  const paddingTop = 22
+  const paddingBottom = 28
 
   let attempts = 0
   while (positions.length < count && attempts < 5000) {
-    const x = padding + Math.random() * (100 - padding * 2)
-    const y = padding + Math.random() * (100 - padding * 2)
+    const x = paddingX + Math.random() * (100 - paddingX * 2)
+    const y = paddingTop + Math.random() * (100 - paddingTop - paddingBottom)
 
     const tooClose = positions.some(
       (p) => Math.sqrt((p.x - x) ** 2 + (p.y - y) ** 2) < minDist,
@@ -42,8 +44,8 @@ export const generateScrewPositions = (count: number): Array<{ x: number; y: num
 
   while (positions.length < count) {
     positions.push({
-      x: padding + Math.random() * (100 - padding * 2),
-      y: padding + Math.random() * (100 - padding * 2),
+      x: paddingX + Math.random() * (100 - paddingX * 2),
+      y: paddingTop + Math.random() * (100 - paddingTop - paddingBottom),
     })
   }
 

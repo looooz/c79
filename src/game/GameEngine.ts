@@ -273,14 +273,18 @@ export class GameEngine {
     const time = performance.now()
     const result = this.rotationDetector.update(x, y, time)
 
+    const speedFactor = 0.75 + result.instantaneousSpeed * 0.1
+    let progress = 0
     if (result.isClockwise) {
-      const speedFactor = 0.6 + result.instantaneousSpeed * 0.08
-      const progress = speedFactor * 0.25
-      screw.rotation += Math.abs(result.instantaneousSpeed * 0.08)
+      progress = speedFactor * 0.35
+    } else if (result.instantaneousSpeed > 1.2 && result.totalClockwise > 0.5) {
+      progress = speedFactor * 0.12
+    }
 
-      if (progress > 0) {
-        this.applyProgress(screw, progress)
-      }
+    screw.rotation += Math.abs(result.instantaneousSpeed * 0.1)
+
+    if (progress > 0) {
+      this.applyProgress(screw, progress)
     }
   }
 
@@ -370,7 +374,7 @@ export class GameEngine {
   }
 
   private updateElectricMode(dt: number): void {
-    if (!this.electricMode) return
+    if (!this.electricMode || !this.isPointerDown) return
     if (!this.activeScrewId) {
       this.handlePointerDown(this.pointerX, this.pointerY, false)
     }
@@ -412,7 +416,7 @@ export class GameEngine {
 
     this.updateElectricMode(dt)
 
-    if ((this.isPointerDown || this.electricMode) && activeScrew) {
+    if (this.isPointerDown && activeScrew) {
       const targetRot = this.electricMode
         ? this.electricRotation
         : Math.atan2(
